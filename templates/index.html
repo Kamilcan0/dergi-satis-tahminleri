@@ -1,0 +1,1969 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Dergi Satış Projeksiyon Motoru</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --bg: #0b0d14;
+      --surface: #111420;
+      --surface2: #171b2e;
+      --surface3: #1e2340;
+      --border: #252a45;
+      --border2: #2e3460;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,.35);
+      --accent2: #00d4aa;
+      --accent2-glow: rgba(0,212,170,.25);
+      --accent3: #ff5f7e;
+      --accent4: #ffc857;
+      --text: #e2e8f8;
+      --muted: #6b7299;
+      --muted2: #4a5070;
+      --radius: 14px;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ══ Particle Canvas ══════════════════════════════════════════ */
+    #particle-canvas {
+      position: fixed; inset: 0; z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ══ Header ══════════════════════════════════════════════════ */
+    header {
+      position: relative; z-index: 10;
+      background: rgba(11,13,20,.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    .logo-mark {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      box-shadow: 0 0 14px var(--accent-glow);
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-family: var(--mono);
+      font-size: .95rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+    header h1 span { color: var(--accent2); }
+    .header-sub { font-size: .68rem; color: var(--muted); margin-top: 1px; }
+    .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    .h-badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: .7rem;
+      color: var(--accent2);
+      font-family: var(--mono);
+    }
+    .h-status {
+      display: flex; align-items: center; gap: 5px;
+      font-size: .7rem; color: var(--muted);
+    }
+    .h-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ══ Main Layout ══════════════════════════════════════════════ */
+    .app-body {
+      position: relative; z-index: 1;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      overflow: hidden;
+    }
+
+    /* ══ Sidebar ══════════════════════════════════════════════════ */
+    .sidebar {
+      background: rgba(17,20,32,.95);
+      backdrop-filter: blur(8px);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Sidebar search */
+    .sb-search {
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sb-search-inner {
+      position: relative;
+    }
+    .sb-search input {
+      width: 100%;
+      background: var(--surface3);
+      border: 1px solid var(--border2);
+      border-radius: 9px;
+      color: var(--text);
+      padding: 8px 10px 8px 32px;
+      font-size: .78rem;
+      outline: none;
+      font-family: var(--sans);
+      transition: border-color .2s;
+    }
+    .sb-search input::placeholder { color: var(--muted2); }
+    .sb-search input:focus { border-color: var(--accent); }
+    .sb-search-icon {
+      position: absolute; left: 9px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted2); font-size: 13px;
+    }
+
+    /* Mini stats */
+    .sb-stats {
+      padding: 12px 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .stat-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .stat-card .s-label { font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .stat-card .s-val { font-size: 1.1rem; font-weight: 700; margin-top: 3px; font-family: var(--mono); }
+    .stat-card .s-sub { font-size: .6rem; color: var(--muted); margin-top: 2px; }
+
+    /* Category nav */
+    .sb-cat-section {
+      padding: 14px 14px 6px;
+      flex-shrink: 0;
+    }
+    .sb-cat-label {
+      font-size: .65rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 8px;
+    }
+    .cat-nav-list { display: flex; flex-direction: column; gap: 2px; }
+    .cat-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all .15s;
+      font-size: .82rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .cat-nav-item:hover { background: var(--surface3); color: var(--text); }
+    .cat-nav-item.active {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 0 18px var(--accent-glow);
+    }
+    .cat-nav-item .cn-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .cat-nav-item .cn-count {
+      margin-left: auto;
+      font-size: .65rem;
+      background: rgba(255,255,255,.1);
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-family: var(--mono);
+    }
+    .cat-nav-item.active .cn-count { background: rgba(255,255,255,.2); }
+
+    /* Magazine list */
+    .sb-mag-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    .sb-mag-label {
+      padding: 10px 14px 4px;
+      font-size: .62rem;
+      font-weight: 600;
+      color: var(--muted2);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      flex-shrink: 0;
+    }
+    .mag-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px 8px;
+    }
+    .mag-scroll::-webkit-scrollbar { width: 3px; }
+    .mag-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .mag-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .12s;
+    }
+    .mag-row:hover { background: var(--surface3); }
+    .mag-row.active { background: rgba(108,99,255,.15); }
+    .mag-row .mr-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .mag-row .mr-name {
+      font-size: .77rem;
+      font-weight: 500;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+    .mag-row .mr-val {
+      font-size: .68rem;
+      color: var(--accent2);
+      font-family: var(--mono);
+      flex-shrink: 0;
+    }
+    .mag-row.highlight { background: rgba(108,99,255,.12); }
+    .mag-row.highlight .mr-name { color: var(--accent); }
+
+    /* ══ Main Right Area ══════════════════════════════════════════ */
+    .main-area {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top prediction console */
+    .predict-console {
+      flex-shrink: 0;
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(11,13,20,.6);
+      backdrop-filter: blur(6px);
+    }
+    .pc-title {
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pc-title::before {
+      content: '▶';
+      color: var(--accent2);
+      font-size: 10px;
+    }
+    .pc-input-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .pc-search-wrap { flex: 1; position: relative; }
+    .pc-search-wrap input {
+      width: 100%;
+      height: 52px;
+      background: var(--surface2);
+      border: 1.5px solid var(--border2);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 0 44px 0 16px;
+      font-size: .95rem;
+      font-family: var(--mono);
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .pc-search-wrap input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .pc-search-wrap input::placeholder { color: var(--muted2); font-size: .8rem; }
+    .pc-clear {
+      position: absolute; right: 12px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none; color: var(--muted2);
+      cursor: pointer; font-size: 16px; display: none;
+    }
+
+    /* Autocomplete dropdown */
+    .ac-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+    .ac-dropdown::-webkit-scrollbar { width: 3px; }
+    .ac-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .ac-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background .1s;
+      border-bottom: 1px solid rgba(46,52,96,.4);
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.focused { background: var(--surface3); }
+    .ac-item .ac-name { font-size: .82rem; flex: 1; }
+    .ac-item .ac-cat { font-size: .65rem; color: var(--muted); }
+    .ac-item .ac-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Predict button */
+    .predict-btn {
+      height: 52px;
+      padding: 0 28px;
+      background: linear-gradient(135deg, var(--accent), #8b7fff);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-family: var(--mono);
+      font-size: .85rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all .2s;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .predict-btn::before {
+      content: '';
+      position: absolute; inset: -2px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 14px;
+      z-index: -1;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .predict-btn:hover:not(:disabled) {
+      box-shadow: 0 0 28px var(--accent-glow), 0 0 60px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+    .predict-btn:hover:not(:disabled)::before { opacity: .6; }
+    .predict-btn:active:not(:disabled) { transform: translateY(0); }
+    .predict-btn:disabled {
+      opacity: .4; cursor: not-allowed;
+      background: var(--surface3);
+    }
+    .predict-btn.running {
+      background: linear-gradient(135deg, #2a2a5a, #1a3a3a);
+      animation: btn-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes btn-pulse {
+      0%,100% { box-shadow: 0 0 12px var(--accent-glow); }
+      50% { box-shadow: 0 0 30px var(--accent-glow), 0 0 60px var(--accent2-glow); }
+    }
+
+    /* Selected magazine display */
+    .selected-mag-bar {
+      display: none;
+      margin-top: 10px;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 9px;
+    }
+    .selected-mag-bar.show { display: flex; }
+    .smb-name { font-size: .8rem; font-weight: 600; flex: 1; font-family: var(--mono); }
+    .smb-cat { font-size: .68rem; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+
+    /* ══ Engine Area ══════════════════════════════════════════════ */
+    .engine-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .engine-area::-webkit-scrollbar { width: 4px; }
+    .engine-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Idle state ── */
+    .idle-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 40px;
+      text-align: center;
+    }
+    .idle-ring {
+      width: 100px; height: 100px;
+      border-radius: 50%;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      position: relative;
+      animation: idle-spin 4s linear infinite;
+    }
+    .idle-ring::after {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      border: 2px solid var(--border2);
+      border-bottom-color: var(--accent2);
+      animation: idle-spin 2.5s linear infinite reverse;
+    }
+    @keyframes idle-spin { to { transform: rotate(360deg); } }
+    .idle-title {
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .idle-sub { font-size: .8rem; color: var(--muted2); max-width: 320px; }
+    .idle-arrow {
+      font-size: .75rem;
+      color: var(--accent);
+      animation: bounce 2s ease-in-out infinite;
+    }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+
+    /* ── Terminal log ── */
+    .terminal-wrap {
+      display: none;
+      background: rgba(0,0,0,.6);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .terminal-wrap.show { display: block; }
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: rgba(0,0,0,.4);
+      border-bottom: 1px solid var(--border);
+    }
+    .t-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .t-dot.red { background: #ff5f57; }
+    .t-dot.yellow { background: #febc2e; }
+    .t-dot.green { background: #28c840; }
+    .terminal-title {
+      margin-left: 6px;
+      font-family: var(--mono);
+      font-size: .68rem;
+      color: var(--muted);
+    }
+    .terminal-progress {
+      height: 3px;
+      background: var(--border);
+    }
+    .terminal-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width .6s ease;
+      width: 0%;
+    }
+    .terminal-body {
+      padding: 14px 16px;
+      min-height: 160px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: .75rem;
+      line-height: 1.8;
+    }
+    .terminal-body::-webkit-scrollbar { width: 3px; }
+    .terminal-body::-webkit-scrollbar-thumb { background: var(--border); }
+    .t-line { display: flex; gap: 8px; opacity: 0; animation: fadeIn .3s forwards; }
+    @keyframes fadeIn { to { opacity: 1; } }
+    .t-line .t-step { color: var(--muted2); min-width: 30px; }
+    .t-line .t-tag { min-width: 160px; }
+    .t-line .t-tag.ok { color: var(--accent2); }
+    .t-line .t-tag.run { color: var(--accent4); }
+    .t-line .t-tag.info { color: var(--accent); }
+    .t-line .t-msg { color: var(--muted); flex: 1; }
+    .t-cursor { display: inline-block; width: 8px; height: 14px; background: var(--accent2); animation: cursor-blink .8s steps(1) infinite; vertical-align: middle; }
+    @keyframes cursor-blink { 50% { opacity: 0; } }
+
+    /* ── Result cards ── */
+    .result-section { display: none; flex-direction: column; gap: 18px; }
+    .result-section.show { display: flex; }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .result-title { font-size: 1.1rem; font-weight: 700; }
+    .res-badge {
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: .72rem;
+      font-weight: 600;
+    }
+    .model-badge {
+      background: rgba(108,99,255,.18);
+      color: var(--accent);
+      border: 1px solid rgba(108,99,255,.3);
+      font-family: var(--mono);
+    }
+    .score-badge {
+      background: rgba(0,212,170,.12);
+      color: var(--accent2);
+      border: 1px solid rgba(0,212,170,.25);
+      font-family: var(--mono);
+    }
+    .risk-badge-high { background: rgba(255,95,126,.15); color: var(--accent3); border: 1px solid rgba(255,95,126,.3); }
+    .risk-badge-mid { background: rgba(255,200,87,.12); color: var(--accent4); border: 1px solid rgba(255,200,87,.25); }
+    .risk-badge-low { background: rgba(0,212,170,.12); color: var(--accent2); border: 1px solid rgba(0,212,170,.25); }
+    .download-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: .73rem;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .download-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    /* Metric cards */
+    .metric-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      position: relative;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity .4s ease, transform .4s ease;
+    }
+    .metric-card.revealed { opacity: 1; transform: translateY(0); }
+    .metric-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .mc-net::after { background: linear-gradient(90deg, var(--accent2), transparent); }
+    .mc-sevk::after { background: linear-gradient(90deg, var(--accent), transparent); }
+    .mc-iade::after { background: linear-gradient(90deg, var(--accent3), transparent); }
+    .mc-net27::after { background: linear-gradient(90deg, var(--accent4), transparent); }
+    .mc-label { font-size: .63rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .mc-value {
+      font-size: 1.55rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      margin-top: 6px;
+      line-height: 1;
+    }
+    .mc-sub { font-size: .65rem; color: var(--muted); margin-top: 4px; }
+    .mc-change { font-size: .72rem; font-weight: 600; margin-top: 4px; }
+    .pos { color: var(--accent2); } .neg { color: var(--accent3); }
+
+    /* CI bar */
+    .ci-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity .4s .3s ease, transform .4s .3s ease;
+    }
+    .ci-section.revealed { opacity: 1; transform: translateY(0); }
+    .ci-title { font-size: .72rem; color: var(--muted); margin-bottom: 12px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+    .ci-bar-wrap { position: relative; height: 32px; background: var(--surface2); border-radius: 8px; overflow: hidden; }
+    .ci-bar-fill {
+      position: absolute; top: 0; height: 100%;
+      background: linear-gradient(90deg, rgba(108,99,255,.3), rgba(0,212,170,.3));
+      border-left: 2px solid var(--accent);
+      border-right: 2px solid var(--accent2);
+      transition: left .8s ease, width .8s ease;
+    }
+    .ci-bar-center {
+      position: absolute; top: 0; height: 100%;
+      width: 3px;
+      background: var(--accent2);
+      transition: left .8s ease;
+      box-shadow: 0 0 8px var(--accent2);
+    }
+    .ci-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      font-size: .65rem;
+      font-family: var(--mono);
+      color: var(--muted);
+    }
+
+    /* Charts */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 14px;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity .5s .5s ease, transform .5s .5s ease;
+    }
+    .charts-row.revealed { opacity: 1; transform: translateY(0); }
+    .chart-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+    .chart-box h4 {
+      font-size: .72rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 12px;
+    }
+    .chart-box canvas { max-height: 190px; }
+
+    /* Detail table */
+    .detail-table-wrap {
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity .5s .7s ease, transform .5s .7s ease;
+    }
+    .detail-table-wrap.revealed { opacity: 1; transform: translateY(0); }
+    .dt-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .dt-label { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-family: var(--mono); }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .table-wrap table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+    .table-wrap th { background: var(--surface2); padding: 9px 12px; text-align: left; font-size: .63rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+    .table-wrap td { padding: 8px 12px; border-bottom: 1px solid rgba(37,42,69,.5); }
+    .table-wrap tr:last-child td { border-bottom: none; }
+    .table-wrap tr:hover td { background: rgba(108,99,255,.04); }
+    .proj-row td { background: rgba(108,99,255,.07); font-weight: 600; }
+
+    /* Loading skeleton */
+    .skel { background: var(--surface2); border-radius: 6px; animation: skel-pulse 1.5s ease-in-out infinite; }
+    @keyframes skel-pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+    /* ══ View containers ══════════════════════════════════════════ */
+    .view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .view.active { display: flex; }
+
+    /* ══ Dashboard ════════════════════════════════════════════════ */
+    .dash-area {
+      flex: 1; overflow-y: auto; padding: 24px 28px; display: flex;
+      flex-direction: column; gap: 20px;
+    }
+    .dash-area::-webkit-scrollbar { width: 4px; }
+    .dash-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* KPI row */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      align-items: center;
+    }
+    .kpi-arrow {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted2); font-size: 1.2rem;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .kpi-card:hover { border-color: var(--border2); box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+    .kpi-card::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+    }
+    .kpi-c1::after { background: linear-gradient(90deg, var(--accent), transparent); }
+    .kpi-c2::after { background: linear-gradient(90deg, var(--muted), transparent); }
+    .kpi-c3::after { background: linear-gradient(90deg, var(--accent2), transparent); }
+    .kpi-c4::after { background: linear-gradient(90deg, var(--accent4), transparent); }
+    .kpi-label { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+    .kpi-year { font-size: .58rem; color: var(--muted2); margin-top: 1px; }
+    .kpi-value {
+      font-family: var(--mono); font-size: 1.6rem; font-weight: 700;
+      margin-top: 8px; line-height: 1;
+    }
+    .kpi-change { font-size: .7rem; font-weight: 600; margin-top: 6px; }
+
+    /* Dashboard charts row — tek grafik */
+    .dash-charts { display: block; }
+    .dash-chart-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+    .dash-chart-box h4 {
+      font-size: .68rem; color: var(--muted); font-family: var(--mono);
+      text-transform: uppercase; letter-spacing: .07em; margin-bottom: 14px;
+    }
+    .dash-chart-box canvas { max-height: 220px; }
+
+    /* System info section */
+    .sys-info {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    .sys-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+    .sys-card-title {
+      font-family: var(--mono); font-size: .68rem; color: var(--accent);
+      letter-spacing: .08em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+    }
+    .sys-card-title .sys-icon { font-size: .9rem; }
+    .sys-card ul {
+      list-style: none; display: flex; flex-direction: column; gap: 5px;
+    }
+    .sys-card ul li {
+      font-size: .73rem; color: var(--muted); display: flex; align-items: center; gap: 6px;
+    }
+    .sys-card ul li::before { content: '·'; color: var(--accent2); font-size: 1rem; }
+    .sys-section-label {
+      font-size: .6rem; text-transform: uppercase; letter-spacing: .12em;
+      color: var(--muted2); font-weight: 600; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ══ Browse View ══════════════════════════════════════════════ */
+    .browse-area {
+      flex: 1; overflow-y: auto; padding: 0 28px 24px;
+      display: flex; flex-direction: column;
+    }
+    .browse-area::-webkit-scrollbar { width: 4px; }
+    .browse-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .browse-header {
+      position: sticky; top: 0; z-index: 5;
+      background: rgba(11,13,20,.9); backdrop-filter: blur(8px);
+      padding: 16px 0 14px;
+      display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--border); margin-bottom: 18px;
+    }
+    .browse-title {
+      font-size: .95rem; font-weight: 700; flex: 1;
+    }
+    .browse-subtitle { font-size: .72rem; color: var(--muted); }
+    .back-btn {
+      background: transparent; border: 1px solid var(--border2);
+      border-radius: 8px; color: var(--muted); font-size: .73rem;
+      padding: 5px 12px; cursor: pointer; font-family: var(--sans);
+      transition: all .15s;
+    }
+    .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .mag-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .mag-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all .18s;
+      position: relative; overflow: hidden;
+    }
+    .mag-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .mag-card:hover { border-color: var(--border2); transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,.4); }
+    .mc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .mc-name { font-size: .82rem; font-weight: 600; line-height: 1.3; flex: 1; }
+    .mc-risk-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .mc-forecast { font-family: var(--mono); font-size: 1.15rem; font-weight: 700; color: var(--accent2); }
+    .mc-forecast-label { font-size: .58rem; color: var(--muted2); text-transform: uppercase; letter-spacing: .06em; }
+    .mc-cat-tag {
+      display: inline-block; font-size: .6rem; padding: 2px 8px;
+      border-radius: 20px; font-weight: 600; margin-top: 8px;
+    }
+
+    /* ══ Predict View header bar ══════════════════════════════════ */
+    .predict-view-nav {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 28px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(11,13,20,.6);
+      flex-shrink: 0;
+    }
+    .predict-view-nav .back-btn { font-size: .7rem; }
+    .pv-breadcrumb { font-size: .7rem; color: var(--muted); font-family: var(--mono); }
+    .pv-breadcrumb span { color: var(--accent2); }
+  </style>
+</head>
+<body>
+
+<!-- Particle canvas -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- Header -->
+<header>
+  <div class="logo-mark">⚡</div>
+  <div>
+    <h1>Dergi Satış Tahminleri</h1>
+  </div>
+  <div class="header-right">
+    <div class="h-status"><div class="dot"></div><span id="hdr-count">Yükleniyor…</span></div>
+    <div class="h-badge" id="hdr-year">2026–2027</div>
+  </div>
+</header>
+
+<!-- Yükleniyor Overlay -->
+<div id="boot-overlay" style="
+  position:fixed;inset:0;background:#0a0d14;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:9999;transition:opacity .6s ease;">
+  <div style="font-family:'JetBrains Mono',monospace;color:#78dce8;font-size:1.1rem;letter-spacing:.15em;margin-bottom:1.5rem">
+    ◈ TAHMİN MOTORU
+  </div>
+  <div id="boot-msg" style="font-family:'JetBrains Mono',monospace;color:#a9b2c3;font-size:.78rem;margin-bottom:1.2rem;min-height:1.2em">
+    Sistem başlatılıyor...
+  </div>
+  <div style="width:260px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden">
+    <div id="boot-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#78dce8,#a9dc76);border-radius:2px;transition:width .4s ease"></div>
+  </div>
+  <div id="boot-detail" style="font-family:'JetBrains Mono',monospace;color:#595f6e;font-size:.65rem;margin-top:.8rem;text-align:center;max-width:320px"></div>
+</div>
+
+<!-- App Body -->
+<div class="app-body">
+
+  <!-- ═══ SIDEBAR ═══════════════════════════════════════════════ -->
+  <aside class="sidebar">
+
+    <!-- Mini stats -->
+    <div class="sb-stats" id="sb-stats" style="grid-template-columns:1fr;gap:6px;padding:12px 12px 8px">
+      <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);font-weight:600;padding:4px 4px 6px;border-bottom:1px solid var(--border)">Genel Bakış</div>
+      <div class="stat-card" style="cursor:pointer;transition:border-color .15s" onclick="showDashboard()">
+        <div class="s-label">Toplam Dergi</div>
+        <div class="s-val" style="color:var(--accent)" id="st-count">—</div>
+        <div class="s-sub">veri setinde</div>
+      </div>
+    </div>
+
+    <!-- Category nav -->
+    <div class="sb-cat-section">
+      <div class="sb-cat-label">Kategoriler</div>
+      <div class="cat-nav-list" id="cat-nav"></div>
+    </div>
+
+  </aside>
+
+  <!-- ═══ MAIN AREA ══════════════════════════════════════════════ -->
+  <div class="main-area">
+
+    <!-- ── VIEW: DASHBOARD ── -->
+    <div class="view active" id="view-dashboard">
+      <div class="dash-area">
+
+        <!-- KPI Row -->
+        <div>
+          <div class="sys-section-label" style="margin-bottom:14px">Satış Özeti — Zaman Çizgisi</div>
+          <div class="kpi-row">
+            <div class="kpi-card kpi-c1">
+              <div class="kpi-label">Toplam Dergi</div>
+              <div class="kpi-year">Veri setinde</div>
+              <div class="kpi-value" style="color:var(--accent)" id="kpi-count">—</div>
+              <div class="kpi-change" style="color:var(--muted)">kategori takip ediliyor</div>
+            </div>
+            <div class="kpi-card kpi-c2">
+              <div class="kpi-label">Net Satış 2025</div>
+              <div class="kpi-year">Son gerçekleşen yıl</div>
+              <div class="kpi-value" style="color:var(--text)" id="kpi-net25">—</div>
+              <div class="kpi-change" id="kpi-net25-chg" style="color:var(--muted)"></div>
+            </div>
+            <div class="kpi-card kpi-c3">
+              <div class="kpi-label">Tahmin 2026</div>
+              <div class="kpi-year">Model projeksiyonu</div>
+              <div class="kpi-value" style="color:var(--accent2)" id="kpi-f26">—</div>
+              <div class="kpi-change" id="kpi-f26-chg"></div>
+            </div>
+            <div class="kpi-card kpi-c4">
+              <div class="kpi-label">Tahmin 2027</div>
+              <div class="kpi-year">Model projeksiyonu</div>
+              <div class="kpi-value" style="color:var(--accent4)" id="kpi-f27">—</div>
+              <div class="kpi-change" id="kpi-f27-chg"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="dash-chart-box" style="padding:20px 24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <h4 style="margin-bottom:0">Toplam Net Satış Trendi — Tüm Dergiler (2019–2027)</h4>
+            <div style="display:flex;gap:16px;font-size:.65rem;color:var(--muted);font-family:var(--mono)">
+              <span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:18px;height:2px;background:var(--accent)"></span>Gerçek</span>
+              <span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:18px;height:2px;background:var(--accent2);border-top:2px dashed var(--accent2)"></span>Tahmin</span>
+            </div>
+          </div>
+          <canvas id="dash-total-trend" style="max-height:260px"></canvas>
+        </div>
+
+        <!-- System info -->
+        <div>
+          <div class="sys-section-label" style="margin-bottom:12px">Sistem Bilgisi</div>
+          <div class="sys-info">
+            <div class="sys-card">
+              <div class="sys-card-title"><span class="sys-icon">◈</span> Veri Kaynağı</div>
+              <ul>
+                <li>Excel satış verisi (2019–2025)</li>
+                <li>TÜİK Ulusal Tiraj Trendi</li>
+                <li>Sektörel yüzdelik dağılım</li>
+                <li id="sys-mag-count">90 dergi takip ediliyor</li>
+              </ul>
+            </div>
+            <div class="sys-card">
+              <div class="sys-card-title"><span class="sys-icon">⚙</span> Model — LightGBM Global</div>
+              <ul>
+                <li>440 satır × 14 özellik</li>
+                <li>Walk-Forward CV (2023/2024/2025)</li>
+                <li id="sys-r2">CV R² ortalama: yükleniyor…</li>
+                <li id="sys-mae">CV MAE ortalama: yükleniyor…</li>
+              </ul>
+            </div>
+            <div class="sys-card">
+              <div class="sys-card-title"><span class="sys-icon">◉</span> Çıktılar</div>
+              <ul>
+                <li>2026 &amp; 2027 Net Satış Tahmini</li>
+                <li>Sevk ve İade Projeksiyonu</li>
+                <li>%90 Güven Aralığı</li>
+                <li>Risk Skoru (Yüksek/Orta/Düşük)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /view-dashboard -->
+
+    <!-- ── VIEW: BROWSE ── -->
+    <div class="view" id="view-browse">
+      <div class="browse-area">
+        <div class="browse-header">
+          <div>
+            <div class="browse-title" id="browse-title">Kategoriler</div>
+            <div class="browse-subtitle" id="browse-subtitle">Bir dergi seçerek tahmin başlatın</div>
+          </div>
+          <button class="back-btn" onclick="showDashboard()">⌂ Dashboard</button>
+        </div>
+        <div class="mag-grid" id="mag-grid"></div>
+      </div>
+    </div><!-- /view-browse -->
+
+    <!-- ── VIEW: PREDICT ── -->
+    <div class="view" id="view-predict">
+
+      <!-- Nav bar -->
+      <div class="predict-view-nav">
+        <button class="back-btn" id="pv-back-btn" onclick="goBackFromPredict()">← Geri</button>
+        <div class="pv-breadcrumb" id="pv-breadcrumb">Dashboard / <span>—</span></div>
+        <button class="back-btn" onclick="showDashboard()" style="margin-left:auto">⌂ Dashboard</button>
+      </div>
+
+      <!-- Prediction console -->
+      <div class="predict-console">
+        <div class="pc-title">Projeksiyon Motoru — Dergi Seç ve Tahmin Başlat</div>
+        <div class="pc-input-row">
+          <div class="pc-search-wrap">
+            <input type="text" id="pc-input" placeholder="Dergi adı girin veya kategoriden seçin…"
+                   oninput="pcInputChange()" onkeydown="pcKeyDown(event)" autocomplete="off"/>
+            <button class="pc-clear" id="pc-clear" onclick="clearSelection()">✕</button>
+            <div class="ac-dropdown" id="ac-dropdown"></div>
+          </div>
+          <button class="predict-btn" id="predict-btn" disabled onclick="startPrediction()">
+            ⚡ TAHMİN ET
+          </button>
+        </div>
+        <div class="selected-mag-bar" id="selected-bar">
+          <span style="color:var(--muted2);font-size:.65rem;font-family:var(--mono)">SEÇİLİ:</span>
+          <span class="smb-name" id="smb-name">—</span>
+          <span class="smb-cat res-badge" id="smb-cat">—</span>
+        </div>
+      </div>
+
+      <!-- Engine area -->
+      <div class="engine-area" id="engine-area">
+
+        <!-- Idle -->
+        <div class="idle-screen" id="idle-screen">
+          <div class="idle-ring"></div>
+          <div class="idle-title">MOTOR HAZIR</div>
+          <div class="idle-sub">Yukarıdan bir dergi seçin,<br>ardından TAHMİN ET butonuna basın.</div>
+        </div>
+
+      <!-- Terminal -->
+      <div class="terminal-wrap" id="terminal-wrap">
+        <div class="terminal-header">
+          <div class="t-dot red"></div>
+          <div class="t-dot yellow"></div>
+          <div class="t-dot green"></div>
+          <div class="terminal-title">projeksiyon-engine v2.0 — stdout</div>
+        </div>
+        <div class="terminal-progress">
+          <div class="terminal-progress-bar" id="t-progress"></div>
+        </div>
+        <div class="terminal-body" id="terminal-body"></div>
+      </div>
+
+      <!-- Results -->
+      <div class="result-section" id="result-section">
+
+        <div class="result-header">
+          <div class="result-title" id="res-title">—</div>
+          <span class="res-badge model-badge" id="res-model">—</span>
+          <span class="res-badge score-badge" id="res-score" title="Walk-Forward CV R²">—</span>
+          <span class="res-badge" id="res-cv-mae" style="background:rgba(120,220,232,0.12);color:var(--accent);font-size:.65rem;cursor:default" title="Ortalama Mutlak Hata (CV)"></span>
+          <span class="res-badge" id="res-risk">—</span>
+          <button class="download-btn" id="res-download" onclick="">⬇ CSV</button>
+        </div>
+
+        <div class="metric-cards" id="metric-cards" style="grid-template-columns:repeat(5,1fr)">
+          <div class="metric-card mc-net" id="mc-net">
+            <div class="mc-label">Tahmini Net 2026</div>
+            <div class="mc-value pos" id="mc-net-val">—</div>
+            <div class="mc-sub">adet</div>
+            <div class="mc-change" id="mc-net-chg"></div>
+          </div>
+          <div class="metric-card mc-sevk" id="mc-sevk">
+            <div class="mc-label">Tahmini Sevk 2026</div>
+            <div class="mc-value" style="color:var(--accent)" id="mc-sevk-val">—</div>
+            <div class="mc-sub">adet</div>
+            <div class="mc-sub" id="mc-sevk-27"></div>
+          </div>
+          <div class="metric-card mc-iade" id="mc-iade">
+            <div class="mc-label">Tahmini İade 2026</div>
+            <div class="mc-value neg" id="mc-iade-val">—</div>
+            <div class="mc-sub">adet</div>
+            <div class="mc-sub" id="mc-iade-trend"></div>
+          </div>
+          <div class="metric-card mc-net27" id="mc-net27">
+            <div class="mc-label">Tahmini Net 2027</div>
+            <div class="mc-value" style="color:var(--accent4)" id="mc-net27-val">—</div>
+            <div class="mc-sub">adet</div>
+            <div class="mc-change" id="mc-net27-chg"></div>
+          </div>
+          <div class="metric-card" id="mc-basari" style="--mc-color:var(--accent2)">
+            <div class="mc-label">Başarı Oranı 2026</div>
+            <div class="mc-value" style="color:var(--accent2)" id="mc-basari-val">—</div>
+            <div class="mc-sub">Net / Sevk</div>
+            <div class="mc-sub" id="mc-basari-hist"></div>
+          </div>
+        </div>
+
+        <div class="ci-section" id="ci-section">
+          <div class="ci-title">Güven Aralığı — Net 2026 (P10 – P90)</div>
+          <div class="ci-bar-wrap" id="ci-bar-wrap">
+            <div class="ci-bar-fill" id="ci-fill" style="left:0%;width:0%"></div>
+            <div class="ci-bar-center" id="ci-center" style="left:50%"></div>
+          </div>
+          <div class="ci-labels">
+            <span id="ci-low-lbl">—</span>
+            <span id="ci-center-lbl" style="color:var(--accent2)">Tahmin: —</span>
+            <span id="ci-high-lbl">—</span>
+          </div>
+        </div>
+
+        <div class="charts-row" id="charts-row">
+          <div class="chart-box">
+            <h4>Net Satış Trendi + Projeksiyon (2019–2027)</h4>
+            <canvas id="trend-chart"></canvas>
+          </div>
+          <div class="chart-box">
+            <h4>Sevk / İade / Net — Yıllık</h4>
+            <canvas id="bar-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="detail-table-wrap" id="detail-table-wrap">
+          <div class="dt-header">
+            <div class="dt-label">Yıllık Detay Tablosu</div>
+          </div>
+          <div class="table-wrap" id="detail-table"></div>
+        </div>
+
+      </div><!-- /result-section -->
+
+      </div><!-- /engine-area -->
+    </div><!-- /view-predict -->
+
+  </div><!-- /main-area -->
+</div><!-- /app-body -->
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// PARTICLE BACKGROUND
+// ═══════════════════════════════════════════════════════════
+(function(){
+  const canvas = document.getElementById('particle-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+  const N = 55, CONN = 130;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  for (let i = 0; i < N; i++) {
+    particles.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - .5) * .4,
+      vy: (Math.random() - .5) * .4,
+      r: Math.random() * 1.8 + .5,
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(108,99,255,.5)';
+      ctx.fill();
+    });
+    for (let i = 0; i < N; i++) {
+      for (let j = i + 1; j < N; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        if (d < CONN) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(108,99,255,${(1 - d/CONN) * .18})`;
+          ctx.lineWidth = .8;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ═══════════════════════════════════════════════════════════
+// GLOBALS
+// ═══════════════════════════════════════════════════════════
+const CAT_COLORS = {
+  "Siyasi/Haber":"#ff5f7e","Sektörel/Mesleki":"#6c63ff",
+  "Kültür/Turizm":"#00d4aa","Ekonomi/Finans":"#ffc857","Diğerleri":"#a29bfe"
+};
+const RISK_COLORS = { "Yüksek":"var(--accent3)", "Orta":"var(--accent4)", "Düşük":"var(--accent2)" };
+
+let allMags = [];
+let activeCat = "Tümü";
+let selectedMag = null;
+let acFocusIdx = -1;
+let charts = {};
+
+const fmt = n => (n == null) ? "—" : Math.round(n).toLocaleString("tr-TR");
+const pct = n => n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
+const catColor = c => CAT_COLORS[c] || "#8890b5";
+const riskClass = r => r === "Yüksek" ? "risk-badge-high" : r === "Orta" ? "risk-badge-mid" : "risk-badge-low";
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+function _bootMsg(msg, pct, detail) {
+  const el = document.getElementById("boot-msg");
+  const bar = document.getElementById("boot-bar");
+  const det = document.getElementById("boot-detail");
+  if (el) el.textContent = msg;
+  if (bar) bar.style.width = pct + "%";
+  if (det && detail) det.textContent = detail;
+}
+
+async function init() {
+  _bootMsg("Model eğitiliyor… (LightGBM 440 satır)", 15, "Bu işlem sadece ilk açılışta ~10 sn sürer, sonraki istekler anlık olur.");
+
+  // Ardışık çek — her biri gelince progress güncelle
+  _bootMsg("Dergiler ve tahminler alınıyor…", 30, "");
+  const magsRes = await fetch("/api/magazines");
+  allMags = await magsRes.json();
+
+  _bootMsg("Özet istatistikler yükleniyor…", 60, "");
+  const sumRes = await fetch("/api/summary");
+  const sum = await sumRes.json();
+
+  _bootMsg("CV metrikleri alınıyor…", 80, "");
+  const cvRes = await fetch("/api/cv_metrics");
+  const cvData = await cvRes.json();
+  window._cvMetrics = cvData.cv_metrics || {};
+  window._featureImportance = cvData.feature_importance || [];
+
+  _bootMsg("Arayüz hazırlanıyor…", 95, "");
+  await new Promise(r => setTimeout(r, 200));
+
+  // Header
+  document.getElementById("hdr-count").textContent = `${allMags.length} Dergi · CANLI`;
+
+  buildCatNav();
+
+  // Sidebar + Dashboard KPI
+  document.getElementById("st-count").textContent  = sum.total_magazines;
+  document.getElementById("kpi-count").textContent = sum.total_magazines;
+
+  // Dashboard KPI cards
+  const net25 = sum.total_net_2025 || 0;
+  const f26   = sum.total_forecast_2026 || 0;
+  const f27   = sum.total_forecast_2027 || 0;
+  document.getElementById("kpi-net25").textContent = fmtK(net25);
+  document.getElementById("kpi-f26").textContent   = fmtK(f26);
+  document.getElementById("kpi-f27").textContent   = fmtK(f27);
+
+  const chg2526 = net25 > 0 ? ((f26 - net25) / net25 * 100) : null;
+  const chg2627 = f26  > 0 ? ((f27 - f26)   / f26   * 100) : null;
+  document.getElementById("kpi-net25-chg").textContent = "Tüm dergiler toplamı";
+  document.getElementById("kpi-f26-chg").innerHTML = chg2526 != null
+    ? `<span class="${chg2526 >= 0 ? 'pos' : 'neg'}">${chg2526 >= 0 ? "+" : ""}${chg2526.toFixed(1)}% vs 2025</span>` : "";
+  document.getElementById("kpi-f27-chg").innerHTML = chg2627 != null
+    ? `<span class="${chg2627 >= 0 ? 'pos' : 'neg'}">${chg2627 >= 0 ? "+" : ""}${chg2627.toFixed(1)}% vs 2026</span>` : "";
+
+  // Sys info CV metrics
+  if (window._cvMetrics) {
+    const cv = window._cvMetrics;
+    document.getElementById("sys-r2").textContent  = cv.mean_r2   != null ? `CV R² ortalama: ${cv.mean_r2.toFixed(3)}` : "CV R²: —";
+    document.getElementById("sys-mae").textContent = cv.mean_mae  != null ? `CV MAE: ${Math.round(cv.mean_mae).toLocaleString("tr-TR")} adet` : "CV MAE: —";
+  }
+  document.getElementById("sys-mag-count").textContent = `${sum.total_magazines} dergi takip ediliyor`;
+
+  // Dashboard charts
+  drawDashCharts(sum);
+
+  // Overlay kapat
+  _bootMsg("Hazır!", 100, "");
+  await new Promise(r => setTimeout(r, 350));
+  const ov = document.getElementById("boot-overlay");
+  if (ov) { ov.style.opacity = "0"; setTimeout(() => ov.remove(), 650); }
+}
+
+function fmtK(n) {
+  if (!n) return "—";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return Math.round(n).toLocaleString("tr-TR");
+}
+
+// ═══════════════════════════════════════════════════════════
+// VIEW MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+let lastBrowseCat = "Tümü";
+
+function showView(id) {
+  ["view-dashboard", "view-browse", "view-predict"].forEach(v => {
+    const el = document.getElementById(v);
+    el.classList.toggle("active", v === id);
+  });
+}
+
+function showDashboard() {
+  showView("view-dashboard");
+  document.querySelectorAll(".cat-nav-item").forEach(el => el.classList.remove("active"));
+}
+
+function showBrowse(cat) {
+  lastBrowseCat = cat;
+  showView("view-browse");
+
+  const mags = cat === "Tümü" ? allMags : allMags.filter(m => m.category === cat);
+  document.getElementById("browse-title").textContent =
+    cat === "Tümü" ? "Tüm Dergiler" : cat;
+  document.getElementById("browse-subtitle").textContent =
+    `${mags.length} dergi — Tahmin için bir dergiye tıklayın`;
+
+  const color = cat === "Tümü" ? "var(--accent)" : catColor(cat);
+  document.getElementById("mag-grid").innerHTML = mags.map(m => {
+    const riskColor = RISK_COLORS[m.risk_level] || "var(--muted2)";
+    const cc = catColor(m.category);
+    const chg = m.change_rate_last != null
+      ? `<span class="${m.change_rate_last >= 0 ? 'pos' : 'neg'}" style="font-size:.65rem">${m.change_rate_last >= 0 ? "+" : ""}${m.change_rate_last.toFixed(1)}% son yıl</span>`
+      : "";
+    return `<div class="mag-card" onclick="loadMag('${m.name.replace(/'/g, "\\'")}')"
+        style="border-color:${cc}33"
+        onmouseenter="this.style.borderColor='${cc}88'" onmouseleave="this.style.borderColor='${cc}33'">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${cc};opacity:.7"></div>
+      <div class="mc-head">
+        <div class="mc-name">${m.name}</div>
+        <div class="mc-risk-dot" style="background:${riskColor}" title="${m.risk_level || ''} Risk"></div>
+      </div>
+      <div class="mc-forecast-label">2026 Tahmin</div>
+      <div class="mc-forecast">${fmtK(m.forecast_2026)}</div>
+      <div style="margin-top:4px">${chg}</div>
+      <div class="mc-cat-tag" style="background:${cc}22;color:${cc};border:1px solid ${cc}44">${m.category}</div>
+    </div>`;
+  }).join("");
+}
+
+function showPredict() {
+  showView("view-predict");
+  const crumb = document.getElementById("pv-breadcrumb");
+  if (crumb && selectedMag) {
+    crumb.innerHTML = `${lastBrowseCat === "Tümü" ? "Dashboard" : lastBrowseCat} / <span>${selectedMag.name}</span>`;
+  }
+  const backBtn = document.getElementById("pv-back-btn");
+  if (backBtn) {
+    backBtn.textContent = lastBrowseCat === "Tümü" ? "⌂ Dashboard" : `← ${lastBrowseCat}`;
+  }
+}
+
+function goBackFromPredict() {
+  if (lastBrowseCat === "Tümü") {
+    showDashboard();
+  } else {
+    showBrowse(lastBrowseCat);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD CHARTS
+// ═══════════════════════════════════════════════════════════
+let dashCharts = {};
+
+function drawDashCharts(sum) {
+  const byYear = sum.total_by_year || {};
+  const allYrs = Object.keys(byYear).map(Number).sort((a, b) => a - b);
+  const actualFull = allYrs.map(y => y <= 2025 ? (byYear[y] || null) : null);
+  const fcstVals   = allYrs.map(y => y >= 2025 ? (byYear[y] || null) : null);
+
+  if (dashCharts.trend) dashCharts.trend.destroy();
+  dashCharts.trend = new Chart(document.getElementById("dash-total-trend"), {
+    type: "line",
+    data: {
+      labels: allYrs,
+      datasets: [
+        {
+          label: "Gerçek Net Satış",
+          data: actualFull,
+          borderColor: "rgba(108,99,255,1)",
+          backgroundColor: "rgba(108,99,255,.1)",
+          borderWidth: 2.5,
+          pointRadius: 5,
+          pointBackgroundColor: "rgba(108,99,255,1)",
+          fill: true,
+          tension: .35,
+          spanGaps: false,
+        },
+        {
+          label: "Tahmin (2026–2027)",
+          data: fcstVals,
+          borderColor: "rgba(0,212,170,1)",
+          backgroundColor: "rgba(0,212,170,.07)",
+          borderWidth: 2.5,
+          borderDash: [7, 4],
+          pointRadius: 6,
+          pointBackgroundColor: "rgba(0,212,170,1)",
+          fill: true,
+          tension: .35,
+          spanGaps: false,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 1500, easing: "easeInOutQuart" },
+      plugins: {
+        legend: { labels: { color: "#6b7299", font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${fmt(ctx.raw)} adet`,
+            afterBody: items => Number(items[0]?.label) >= 2026 ? ["  LGB+Hibrit Projeksiyonu"] : []
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: "rgba(37,42,69,.8)" }, ticks: { color: "#6b7299", font: { size: 10 } } },
+        y: {
+          min: 0,
+          grace: "12%",
+          grid: { color: "rgba(37,42,69,.8)" },
+          ticks: {
+            color: "#6b7299",
+            font: { size: 10 },
+            maxTicksLimit: 6,
+            callback: v => fmtK(v)
+          }
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// CATEGORY NAV
+// ═══════════════════════════════════════════════════════════
+function buildCatNav() {
+  const cats = ["Tümü", ...Object.keys(CAT_COLORS)];
+  const counts = {};
+  allMags.forEach(m => {
+    counts[m.category] = (counts[m.category] || 0) + 1;
+  });
+  counts["Tümü"] = allMags.length;
+
+  const nav = document.getElementById("cat-nav");
+  nav.innerHTML = cats.map(c => {
+    const dot = c !== "Tümü" ? `<span class="cn-dot" style="background:${catColor(c)}"></span>` : `<span class="cn-dot" style="background:var(--muted2)"></span>`;
+    return `<div class="cat-nav-item ${c === activeCat ? 'active' : ''}" data-cat="${c}" onclick="selectCat('${c}')">
+      ${dot}
+      <span>${c}</span>
+      <span class="cn-count">${counts[c] || 0}</span>
+    </div>`;
+  }).join("");
+}
+
+function selectCat(cat) {
+  activeCat = cat;
+  document.querySelectorAll(".cat-nav-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.cat === cat);
+  });
+  showBrowse(cat);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAGAZINE LIST
+// ═══════════════════════════════════════════════════════════
+function renderMagList(cat, searchQ = "") {
+  let mags = cat === "Tümü" ? allMags : allMags.filter(m => m.category === cat);
+  if (searchQ) {
+    mags = allMags.filter(m => m.name.toLowerCase().includes(searchQ.toLowerCase()));
+  }
+
+  const label = document.getElementById("mag-section-label");
+  label.textContent = searchQ ? `Arama: "${searchQ}" (${mags.length})` : `${cat === "Tümü" ? "Tüm Dergiler" : cat} (${mags.length})`;
+
+  const scroll = document.getElementById("mag-scroll");
+  if (!mags.length) {
+    scroll.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted2);font-size:.75rem">Sonuç bulunamadı</div>`;
+    return;
+  }
+
+  scroll.innerHTML = mags.map(m => {
+    const riskColor = RISK_COLORS[m.risk_level] || "var(--muted2)";
+    const isActive = selectedMag && selectedMag.name === m.name;
+    const highlight = searchQ && m.name.toLowerCase().includes(searchQ.toLowerCase());
+    return `<div class="mag-row${isActive ? ' active' : ''}${highlight ? ' highlight' : ''}" onclick="loadMag('${m.name.replace(/'/g, "\\'")}')">
+      <span class="mr-dot" style="background:${riskColor}" title="${m.risk_level || ''} risk"></span>
+      <span class="mr-name">${m.name}</span>
+      <span class="mr-val">${fmtK(m.forecast_2026)}</span>
+    </div>`;
+  }).join("");
+}
+
+function sbSearch() {
+  const q = document.getElementById("sb-search").value.trim();
+  renderMagList(activeCat, q);
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTOCOMPLETE (top input)
+// ═══════════════════════════════════════════════════════════
+function pcInputChange() {
+  const q = document.getElementById("pc-input").value.trim();
+  if (!q) { closeAc(); clearSelection(); return; }
+  const matches = allMags.filter(m => m.name.toLowerCase().includes(q.toLowerCase())).slice(0, 10);
+  renderAcDropdown(matches, q);
+}
+
+function renderAcDropdown(mags, q) {
+  const dd = document.getElementById("ac-dropdown");
+  if (!mags.length) { dd.style.display = "none"; return; }
+  acFocusIdx = -1;
+  dd.innerHTML = mags.map((m, i) => `
+    <div class="ac-item" data-idx="${i}" data-name="${m.name}" onclick="loadMag('${m.name.replace(/'/g, "\\'")}')">
+      <span class="ac-dot" style="background:${catColor(m.category)}"></span>
+      <span class="ac-name">${highlightMatch(m.name, q)}</span>
+      <span class="ac-cat">${m.category}</span>
+    </div>`).join("");
+  dd.style.display = "block";
+}
+
+function highlightMatch(name, q) {
+  const idx = name.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return name;
+  return name.slice(0, idx) + `<mark style="background:rgba(108,99,255,.35);color:#fff;border-radius:3px;padding:0 2px">${name.slice(idx, idx + q.length)}</mark>` + name.slice(idx + q.length);
+}
+
+function pcKeyDown(e) {
+  const dd = document.getElementById("ac-dropdown");
+  const items = dd.querySelectorAll(".ac-item");
+  if (e.key === "ArrowDown") { acFocusIdx = Math.min(acFocusIdx + 1, items.length - 1); updateAcFocus(items); }
+  else if (e.key === "ArrowUp") { acFocusIdx = Math.max(acFocusIdx - 1, 0); updateAcFocus(items); }
+  else if (e.key === "Enter" && acFocusIdx >= 0) { loadMag(items[acFocusIdx].dataset.name); }
+  else if (e.key === "Escape") { closeAc(); }
+}
+
+function updateAcFocus(items) {
+  items.forEach((el, i) => el.classList.toggle("focused", i === acFocusIdx));
+  if (acFocusIdx >= 0) items[acFocusIdx].scrollIntoView({ block: "nearest" });
+}
+
+function closeAc() {
+  document.getElementById("ac-dropdown").style.display = "none";
+}
+
+document.addEventListener("click", e => {
+  if (!e.target.closest(".pc-search-wrap")) closeAc();
+});
+
+// ═══════════════════════════════════════════════════════════
+// SELECT MAGAZINE
+// ═══════════════════════════════════════════════════════════
+function loadMag(name) {
+  const mag = allMags.find(m => m.name === name);
+  if (!mag) return;
+  selectedMag = mag;
+  closeAc();
+
+  // Switch to predict view
+  showPredict();
+
+  // Update top input
+  document.getElementById("pc-input").value = name;
+  document.getElementById("pc-clear").style.display = "block";
+
+  // Selected bar
+  const bar = document.getElementById("selected-bar");
+  bar.classList.add("show");
+  document.getElementById("smb-name").textContent = name;
+  const catEl = document.getElementById("smb-cat");
+  catEl.textContent = mag.category;
+  catEl.style.background = catColor(mag.category) + "22";
+  catEl.style.color = catColor(mag.category);
+  catEl.style.border = `1px solid ${catColor(mag.category)}55`;
+
+  // Enable predict btn
+  document.getElementById("predict-btn").disabled = false;
+
+  // Reset result area to idle
+  resetToIdle();
+}
+
+function clearSelection() {
+  selectedMag = null;
+  document.getElementById("pc-input").value = "";
+  document.getElementById("pc-clear").style.display = "none";
+  document.getElementById("selected-bar").classList.remove("show");
+  document.getElementById("predict-btn").disabled = true;
+  resetToIdle();
+}
+
+function resetToIdle() {
+  document.getElementById("idle-screen").style.display = "flex";
+  document.getElementById("terminal-wrap").classList.remove("show");
+  document.getElementById("result-section").classList.remove("show");
+  destroyCharts();
+}
+
+// ═══════════════════════════════════════════════════════════
+// PREDICTION FLOW
+// ═══════════════════════════════════════════════════════════
+async function startPrediction() {
+  if (!selectedMag) return;
+  const btn = document.getElementById("predict-btn");
+  btn.disabled = true;
+  btn.classList.add("running");
+  btn.textContent = "⟳ HESAPLANIYOR…";
+
+  // Hide idle, show terminal
+  document.getElementById("idle-screen").style.display = "none";
+  document.getElementById("result-section").classList.remove("show");
+  destroyCharts();
+
+  const terminal = document.getElementById("terminal-wrap");
+  terminal.classList.add("show");
+  const body = document.getElementById("terminal-body");
+  body.innerHTML = "";
+  document.getElementById("t-progress").style.width = "0%";
+
+  const name = selectedMag.name;
+
+  // Steps config
+  const cvMae  = window._cvMetrics?.mean_mae  != null ? `MAE=${Math.round(window._cvMetrics.mean_mae).toLocaleString("tr-TR")}` : "";
+  const cvR2   = window._cvMetrics?.mean_r2   != null ? `  R²=${window._cvMetrics.mean_r2.toFixed(3)}` : "";
+  const cvMape = window._cvMetrics?.mean_mape != null ? `  MAPE=${window._cvMetrics.mean_mape.toFixed(1)}%` : "";
+  const steps = [
+    { tag: "VERI_OKUMA",    color: "run",  msg: `Excel veri seti okunuyor... "${name}"` },
+    { tag: "LGB_GLOBAL",    color: "info", msg: `Global LightGBM modeli yüklendi  (90 dergi × 7 yıl = 440 satır)` },
+    { tag: "CV_METRIK",     color: "info", msg: `Walk-Forward CV (3 fold: 2023/24/25)  ${cvMae}${cvR2}${cvMape}` },
+    { tag: "PROJEKSIYON",   color: "run",  msg: "LGB+Hibrit ensemble projeksiyon hesaplanıyor (55% LGB + 45% TÜİK)..." },
+    { tag: "TAMAMLANDI",    color: "ok",   msg: "Sonuçlar hazır ✓" },
+  ];
+
+  // Fetch data in parallel with animation
+  const dataPromise = fetch(`/api/analyze?name=${encodeURIComponent(name)}`).then(r => r.json());
+
+  for (let i = 0; i < steps.length; i++) {
+    await animateStep(body, i + 1, steps[i], i < 4 ? 480 : 300);
+    document.getElementById("t-progress").style.width = `${(i + 1) * 20}%`;
+  }
+
+  // Wait for data
+  const data = await dataPromise;
+
+  // Short pause then reveal
+  await sleep(400);
+  terminal.classList.remove("show");
+
+  // Restore button
+  btn.classList.remove("running");
+  btn.disabled = false;
+  btn.textContent = "⚡ TAHMİN ET";
+
+  if (data.error) {
+    showError(data.error);
+    return;
+  }
+
+  renderResults(data);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function animateStep(container, num, step, duration) {
+  return new Promise(resolve => {
+    const line = document.createElement("div");
+    line.className = "t-line";
+    const numStr = `[${String(num).padStart(2, "0")}]`;
+    const tag = step.tag.padEnd(16, " ");
+    line.innerHTML = `<span class="t-step">${numStr}</span><span class="t-tag ${step.color}">${tag}</span><span class="t-msg"></span><span class="t-cursor"></span>`;
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
+
+    const msgEl = line.querySelector(".t-msg");
+    const cursor = line.querySelector(".t-cursor");
+    const msg = step.msg;
+    let idx = 0;
+    const speed = Math.max(12, Math.floor(duration / msg.length));
+
+    const typer = setInterval(() => {
+      msgEl.textContent += msg[idx++];
+      if (idx >= msg.length) {
+        clearInterval(typer);
+        cursor.remove();
+        resolve();
+      }
+    }, speed);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER RESULTS
+// ═══════════════════════════════════════════════════════════
+function renderResults(d) {
+  const sec = document.getElementById("result-section");
+  sec.classList.add("show");
+
+  // Header
+  document.getElementById("res-title").textContent = d.name;
+  document.getElementById("res-model").textContent = d.best_model || "LGB+Hibrit";
+  document.getElementById("res-score").textContent = d.model_score != null ? `CV R²=${d.model_score.toFixed(3)}` : "—";
+  // CV MAE badge (global, önbellekten)
+  const cvMaeEl = document.getElementById("res-cv-mae");
+  if (window._cvMetrics && window._cvMetrics.mean_mae != null) {
+    cvMaeEl.textContent = `CV MAE ${window._cvMetrics.mean_mae.toLocaleString("tr-TR")}`;
+    cvMaeEl.style.display = "";
+  } else {
+    cvMaeEl.style.display = "none";
+  }
+
+  const riskEl = document.getElementById("res-risk");
+  riskEl.textContent = `${d.risk_level || "—"} Risk`;
+  riskEl.className = `res-badge ${riskClass(d.risk_level)}`;
+
+  document.getElementById("res-download").onclick = () => {
+    window.location.href = `/api/export?name=${encodeURIComponent(d.name)}`;
+  };
+
+  // Metric cards with counter animation
+  const chgLast = d.change_rate_last;
+  const chg2627 = d.forecast_2026 > 0 ? ((d.forecast_2027 - d.forecast_2026) / d.forecast_2026 * 100) : null;
+
+  animateCounter("mc-net-val", d.forecast_2026, 800, "var(--accent2)", 0);
+  document.getElementById("mc-net-chg").innerHTML = chgLast != null
+    ? `<span class="${chgLast >= 0 ? 'pos' : 'neg'}">${pct(chgLast)} önceki yıl</span>` : "";
+
+  animateCounter("mc-sevk-val", d.sevk_forecast_2026, 800, "var(--accent)", 100);
+  document.getElementById("mc-sevk-27").textContent = `→ 2027: ${fmt(d.sevk_forecast_2027)}`;
+
+  animateCounter("mc-iade-val", d.iade_forecast_2026, 800, "var(--accent3)", 200);
+  const it = d.iade_ratio_trend;
+  document.getElementById("mc-iade-trend").innerHTML = it != null
+    ? `<span class="${it > 0 ? 'neg' : 'pos'}">${it > 0 ? "↑ İade oranı artıyor" : "↓ İade oranı düşüyor"}</span>` : "";
+
+  animateCounter("mc-net27-val", d.forecast_2027, 800, "var(--accent4)", 300);
+  document.getElementById("mc-net27-chg").innerHTML = chg2627 != null
+    ? `<span class="${chg2627 >= 0 ? 'pos' : 'neg'}">${pct(chg2627)} vs 2026</span>` : "";
+
+  // Başarı oranı kartı
+  const basari26 = d.basari_forecast_2026;
+  const basariEl = document.getElementById("mc-basari-val");
+  if (basari26 != null) {
+    setTimeout(() => {
+      const start = performance.now();
+      const target = basari26 * 100;
+      function countB(now) {
+        const p = Math.min((now - start) / 800, 1);
+        const ease = 1 - Math.pow(1 - p, 3);
+        basariEl.textContent = (target * ease).toFixed(1) + "%";
+        if (p < 1) requestAnimationFrame(countB);
+      }
+      requestAnimationFrame(countB);
+    }, 400);
+  } else {
+    basariEl.textContent = "—";
+  }
+  const avgB = d.avg_basari;
+  document.getElementById("mc-basari-hist").innerHTML = avgB != null
+    ? `Tarihi ort: ${(avgB * 100).toFixed(1)}%` : "";
+
+  // Reveal cards
+  setTimeout(() => document.getElementById("mc-net").classList.add("revealed"), 50);
+  setTimeout(() => document.getElementById("mc-sevk").classList.add("revealed"), 150);
+  setTimeout(() => document.getElementById("mc-iade").classList.add("revealed"), 250);
+  setTimeout(() => document.getElementById("mc-net27").classList.add("revealed"), 350);
+  setTimeout(() => document.getElementById("mc-basari").classList.add("revealed"), 450);
+
+  // CI bar
+  setTimeout(() => {
+    document.getElementById("ci-section").classList.add("revealed");
+    const low = d.ci_low_2026 || 0, high = d.ci_high_2026 || 0, val = d.forecast_2026 || 0;
+    const range = high - low;
+    if (range > 0) {
+      const pLow = 5, pWidth = 90;
+      const pVal = pLow + ((val - low) / range) * pWidth;
+      document.getElementById("ci-fill").style.left = `${pLow}%`;
+      document.getElementById("ci-fill").style.width = `${pWidth}%`;
+      document.getElementById("ci-center").style.left = `${Math.min(Math.max(pVal, pLow), pLow + pWidth)}%`;
+    }
+    document.getElementById("ci-low-lbl").textContent = fmt(low);
+    document.getElementById("ci-center-lbl").textContent = `Tahmin: ${fmt(val)}`;
+    document.getElementById("ci-high-lbl").textContent = fmt(high);
+  }, 500);
+
+  // Charts
+  setTimeout(() => {
+    document.getElementById("charts-row").classList.add("revealed");
+    drawTrendChart(d);
+    drawBarChart(d);
+  }, 700);
+
+  // Table
+  setTimeout(() => {
+    document.getElementById("detail-table-wrap").classList.add("revealed");
+    renderDetailTable(d);
+  }, 900);
+
+  // Scroll to top of results
+  document.getElementById("engine-area").scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function animateCounter(elId, target, duration, color, delay) {
+  setTimeout(() => {
+    const el = document.getElementById(elId);
+    el.style.color = color;
+    if (!target) { el.textContent = "—"; return; }
+    const start = performance.now();
+    function step(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(Math.round(target * ease));
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }, delay);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════
+function destroyCharts() {
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  charts = {};
+  // Reset reveal states
+  ["mc-net","mc-sevk","mc-iade","mc-net27"].forEach(id => document.getElementById(id)?.classList.remove("revealed"));
+  document.getElementById("ci-section")?.classList.remove("revealed");
+  document.getElementById("charts-row")?.classList.remove("revealed");
+  document.getElementById("detail-table-wrap")?.classList.remove("revealed");
+}
+
+function drawTrendChart(d) {
+  const allYears = [...d.years_actual, 2026, 2027];
+  const netLine = [...d.net_actual, null, null];
+  const fcastLine = [...Array(d.net_actual.length).fill(null), d.forecast_2026, d.forecast_2027];
+  const ciHighLine = [...Array(d.net_actual.length).fill(null), d.ci_high_2026, d.ci_high_2027];
+  const ciLowLine = [...Array(d.net_actual.length).fill(null), d.ci_low_2026, d.ci_low_2027];
+
+  const ctx = document.getElementById("trend-chart");
+  charts.trend = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: allYears,
+      datasets: [
+        { label: "Gerçek Net", data: netLine, borderColor: "rgba(108,99,255,1)", backgroundColor: "rgba(108,99,255,.08)", borderWidth: 2.5, pointRadius: 5, pointBackgroundColor: "rgba(108,99,255,1)", fill: true, tension: .35, spanGaps: false },
+        { label: "Projeksiyon", data: fcastLine, borderColor: "rgba(0,212,170,1)", borderDash: [6,4], borderWidth: 2.5, pointRadius: 6, pointBackgroundColor: "rgba(0,212,170,1)", fill: false, tension: .35, spanGaps: false },
+        { label: "CI Üst", data: ciHighLine, borderColor: "rgba(0,212,170,.2)", borderDash: [3,3], borderWidth: 1, pointRadius: 0, fill: false, spanGaps: false },
+        { label: "CI Alt", data: ciLowLine, borderColor: "rgba(0,212,170,.2)", borderDash: [3,3], borderWidth: 1, pointRadius: 0, fill: "-1", backgroundColor: "rgba(0,212,170,.06)", spanGaps: false },
+      ]
+    },
+    options: {
+      responsive: true, animation: { duration: 1500, easing: "easeInOutQuart" },
+      plugins: {
+        legend: { labels: { color: "#6b7299", font: { size: 10 }, filter: i => i.text !== "CI Üst" && i.text !== "CI Alt" } },
+        tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)} adet` } }
+      },
+      scales: {
+        x: { grid: { color: "rgba(37,42,69,.8)" }, ticks: { color: "#6b7299", font: { size: 10 } } },
+        y: { grid: { color: "rgba(37,42,69,.8)" }, ticks: { color: "#6b7299", font: { size: 10 }, callback: v => fmtK(v) } }
+      }
+    }
+  });
+}
+
+function drawBarChart(d) {
+  const barYears = [...d.years_actual, "2026 ▶", "2027 ▶"];
+  const nReal = d.years_actual.length;
+  const sevkData = [...d.sevk_actual, d.sevk_forecast_2026, d.sevk_forecast_2027];
+  const iadeData = [...d.iade_actual, d.iade_forecast_2026, d.iade_forecast_2027];
+  const netData = [...d.net_actual, d.forecast_2026, d.forecast_2027];
+
+  const ctx = document.getElementById("bar-chart");
+  charts.bar = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: barYears,
+      datasets: [
+        { label: "Sevk", data: sevkData, backgroundColor: barYears.map((_, i) => i < nReal ? "rgba(108,99,255,.75)" : "rgba(108,99,255,.3)"), borderRadius: 4 },
+        { label: "İade", data: iadeData, backgroundColor: barYears.map((_, i) => i < nReal ? "rgba(255,95,126,.75)" : "rgba(255,95,126,.3)"), borderRadius: 4 },
+        { label: "Net", data: netData, backgroundColor: barYears.map((_, i) => i < nReal ? "rgba(0,212,170,.85)" : "rgba(0,212,170,.35)"), borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, animation: { duration: 1200 },
+      plugins: {
+        legend: { labels: { color: "#6b7299", font: { size: 10 } } },
+        tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)} adet` } }
+      },
+      scales: {
+        x: { grid: { color: "rgba(37,42,69,.8)" }, ticks: { color: "#6b7299", font: { size: 9 } } },
+        y: { grid: { color: "rgba(37,42,69,.8)" }, ticks: { color: "#6b7299", font: { size: 10 }, callback: v => fmtK(v) } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// DETAIL TABLE
+// ═══════════════════════════════════════════════════════════
+function renderDetailTable(d) {
+  const rows = d.years_actual.map((y, i) => {
+    const b = d.sevk_actual[i] > 0 ? (d.net_actual[i] / d.sevk_actual[i] * 100).toFixed(1) + "%" : "—";
+    return `<tr><td style="font-weight:600;font-family:var(--mono)">${y}</td><td>${fmt(d.sevk_actual[i])}</td><td style="color:var(--accent3)">${fmt(d.iade_actual[i])}</td><td style="color:var(--accent2);font-weight:600">${fmt(d.net_actual[i])}</td><td>${b}</td><td style="color:var(--muted2);font-size:.7rem;font-family:var(--mono)">GERÇEK</td></tr>`;
+  }).join("");
+
+  document.getElementById("detail-table").innerHTML = `
+    <table>
+      <thead><tr><th>Yıl</th><th>Sevk</th><th>İade</th><th>Net Satış</th><th>Başarı %</th><th>Tür</th></tr></thead>
+      <tbody>
+        ${rows}
+        <tr class="proj-row">
+          <td style="color:var(--accent);font-family:var(--mono)">2026</td>
+          <td>${fmt(d.sevk_forecast_2026)}</td>
+          <td style="color:var(--accent3)">${fmt(d.iade_forecast_2026)}</td>
+          <td style="color:var(--accent2)">${fmt(d.forecast_2026)}</td>
+          <td style="color:var(--accent2)">${d.basari_forecast_2026 != null ? (d.basari_forecast_2026*100).toFixed(1)+"%" : "—"}</td>
+          <td style="color:var(--accent);font-size:.7rem;font-family:var(--mono)">TAHMİN</td>
+        </tr>
+        <tr class="proj-row">
+          <td style="color:var(--accent);font-family:var(--mono)">2027</td>
+          <td>${fmt(d.sevk_forecast_2027)}</td>
+          <td style="color:var(--accent3)">${fmt(d.iade_forecast_2027)}</td>
+          <td style="color:var(--accent2)">${fmt(d.forecast_2027)}</td>
+          <td style="color:var(--accent2)">${d.basari_forecast_2027 != null ? (d.basari_forecast_2027*100).toFixed(1)+"%" : "—"}</td>
+          <td style="color:var(--accent);font-size:.7rem;font-family:var(--mono)">TAHMİN</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+function showError(msg) {
+  const idle = document.getElementById("idle-screen");
+  idle.style.display = "flex";
+  idle.innerHTML = `<div style="color:var(--accent3);font-family:var(--mono);text-align:center">${msg}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
