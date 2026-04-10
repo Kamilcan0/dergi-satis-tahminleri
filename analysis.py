@@ -272,19 +272,23 @@ LGB_PARAMS = {
 
 def walk_forward_cv(df: pd.DataFrame) -> dict:
     """
-    Walk-Forward CV:
+    Walk-Forward CV — Net Sevk ve Toplam Sevk için ayrı ayrı:
       Fold 1: Train 2020-2022 → Test 2023
       Fold 2: Train 2020-2023 → Test 2024
       Fold 3: Train 2020-2024 → Test 2025
+
+    İade artık türetildiği için (iade = sevk - net) ayrı CV yapılmıyor.
     """
     years_avail = sorted(df["year"].unique())
-    train_start = years_avail[0]
-
-    folds = []
     test_years = [y for y in years_avail if y >= 2023]
 
-    all_mae, all_mape, all_r2 = [], [], []
-    models = []
+    # Net CV
+    net_folds = []
+    net_mae_all, net_mape_all, net_r2_all = [], [], []
+
+    # Sevk CV
+    sevk_folds = []
+    sevk_mae_all, sevk_mape_all, sevk_r2_all = [], [], []
 
     for test_year in test_years:
         train_df = df[df["year"] < test_year]
@@ -293,48 +297,81 @@ def walk_forward_cv(df: pd.DataFrame) -> dict:
             continue
 
         X_tr = train_df[FEATURES]
-        y_tr = train_df["target_net"]
         X_te = test_df[FEATURES]
-        y_te = test_df["target_net"]
 
-        model = lgb.LGBMRegressor(**LGB_PARAMS)
-        model.fit(X_tr, y_tr,
-                  eval_set=[(X_te, y_te)],
-                  callbacks=[lgb.early_stopping(50, verbose=False),
-                              lgb.log_evaluation(period=-1)])
-
-        preds = np.maximum(model.predict(X_te), 0)
-        mae  = mean_absolute_error(y_te, preds)
-        # MAPE: sadece gerçek değeri anlamlı olan satırları kullan (>100)
-        y_arr = y_te.values
-        mask  = y_arr > 100
-        if mask.sum() > 0:
-            mape = float(np.mean(np.abs((y_arr[mask] - preds[mask]) / y_arr[mask])) * 100)
-        else:
-            mape = 0.0
+        # ── NET modeli ──
+        y_tr_net = train_df["target_net"]
+        y_te_net = test_df["target_net"]
+        net_model = lgb.LGBMRegressor(**LGB_PARAMS)
+        net_model.fit(X_tr, y_tr_net,
+                      eval_set=[(X_te, y_te_net)],
+                      callbacks=[lgb.early_stopping(50, verbose=False),
+                                  lgb.log_evaluation(period=-1)])
+        preds_net = np.maximum(net_model.predict(X_te), 0)
+        mae_net  = mean_absolute_error(y_te_net, preds_net)
+        y_arr_net = y_te_net.values
+        mask_net  = y_arr_net > 100
+        mape_net  = float(np.mean(np.abs((y_arr_net[mask_net] - preds_net[mask_net]) / y_arr_net[mask_net])) * 100) \
+                    if mask_net.sum() > 0 else 0.0
         try:
-            r2 = r2_score(y_te, preds)
+            r2_net = r2_score(y_te_net, preds_net)
         except Exception:
-            r2 = 0.0
+            r2_net = 0.0
 
-        folds.append({
+        net_folds.append({
             "test_year": test_year,
             "n_train": len(train_df),
             "n_test": len(test_df),
-            "mae": round(mae, 1),
-            "mape": round(mape, 2),
-            "r2": round(r2, 4),
+            "mae": round(mae_net, 1),
+            "mape": round(mape_net, 2),
+            "r2": round(r2_net, 4),
         })
-        all_mae.append(mae)
-        all_mape.append(mape)
-        all_r2.append(r2)
-        models.append(model)
+        net_mae_all.append(mae_net)
+        net_mape_all.append(mape_net)
+        net_r2_all.append(r2_net)
+
+        # ── SEVK modeli ──
+        y_tr_sevk = train_df["target_sevk"]
+        y_te_sevk = test_df["target_sevk"]
+        sevk_model = lgb.LGBMRegressor(**LGB_PARAMS)
+        sevk_model.fit(X_tr, y_tr_sevk,
+                       eval_set=[(X_te, y_te_sevk)],
+                       callbacks=[lgb.early_stopping(50, verbose=False),
+                                   lgb.log_evaluation(period=-1)])
+        preds_sevk = np.maximum(sevk_model.predict(X_te), 0)
+        mae_sevk   = mean_absolute_error(y_te_sevk, preds_sevk)
+        y_arr_sevk = y_te_sevk.values
+        mask_sevk  = y_arr_sevk > 100
+        mape_sevk  = float(np.mean(np.abs((y_arr_sevk[mask_sevk] - preds_sevk[mask_sevk]) / y_arr_sevk[mask_sevk])) * 100) \
+                     if mask_sevk.sum() > 0 else 0.0
+        try:
+            r2_sevk = r2_score(y_te_sevk, preds_sevk)
+        except Exception:
+            r2_sevk = 0.0
+
+        sevk_folds.append({
+            "test_year": test_year,
+            "n_train": len(train_df),
+            "n_test": len(test_df),
+            "mae": round(mae_sevk, 1),
+            "mape": round(mape_sevk, 2),
+            "r2": round(r2_sevk, 4),
+        })
+        sevk_mae_all.append(mae_sevk)
+        sevk_mape_all.append(mape_sevk)
+        sevk_r2_all.append(r2_sevk)
 
     return {
-        "folds": folds,
-        "mean_mae":  round(float(np.mean(all_mae)),  1) if all_mae  else None,
-        "mean_mape": round(float(np.mean(all_mape)), 2) if all_mape else None,
-        "mean_r2":   round(float(np.mean(all_r2)),   4) if all_r2   else None,
+        # Net CV
+        "folds":      net_folds,
+        "mean_mae":   round(float(np.mean(net_mae_all)),  1) if net_mae_all  else None,
+        "mean_mape":  round(float(np.mean(net_mape_all)), 2) if net_mape_all else None,
+        "mean_r2":    round(float(np.mean(net_r2_all)),   4) if net_r2_all   else None,
+        # Sevk CV
+        "sevk_folds":      sevk_folds,
+        "sevk_mean_mae":   round(float(np.mean(sevk_mae_all)),  1) if sevk_mae_all  else None,
+        "sevk_mean_mape":  round(float(np.mean(sevk_mape_all)), 2) if sevk_mape_all else None,
+        "sevk_mean_r2":    round(float(np.mean(sevk_r2_all)),   4) if sevk_r2_all   else None,
     }
 
 
@@ -348,16 +385,9 @@ def train_final_model(df: pd.DataFrame) -> lgb.LGBMRegressor:
 
 
 def train_sevk_model(df: pd.DataFrame) -> lgb.LGBMRegressor:
+    """Toplam Sevk modeli. İade = Sevk - Net olarak türetilir, ayrı model yok."""
     X = df[FEATURES]
     y = df["target_sevk"]
-    model = lgb.LGBMRegressor(**LGB_PARAMS)
-    model.fit(X, y, callbacks=[lgb.log_evaluation(period=-1)])
-    return model
-
-
-def train_iade_model(df: pd.DataFrame) -> lgb.LGBMRegressor:
-    X = df[FEATURES]
-    y = df["target_iade"]
     model = lgb.LGBMRegressor(**LGB_PARAMS)
     model.fit(X, y, callbacks=[lgb.log_evaluation(period=-1)])
     return model
@@ -479,12 +509,15 @@ def forecast_one(
     name: str, data: dict,
     net_model: lgb.LGBMRegressor,
     sevk_model: lgb.LGBMRegressor,
-    iade_model: lgb.LGBMRegressor,
     cat_enc: int,
     national_tiraj: dict, sector_trends: dict,
     cv_metrics: dict,
     le: LabelEncoder,
 ) -> dict:
+    """
+    Net Sevk ve Toplam Sevk ayrı modellerle tahmin edilir.
+    İade = Sevk - Net olarak türetilir → matematiksel tutarlılık garantili.
+    """
     years = data["years"]
     sevks = data["sevk"]
     iades = data["iade"]
@@ -526,21 +559,22 @@ def forecast_one(
             cat_enc, national_tiraj, sector_trends, cat, net_hist, sevk_hist
         )
 
-        # LGB tahminleri
+        # LGB tahminleri (net ve sevk ayrı model)
         lgb_net  = max(float(net_model.predict(row)[0]),  0)
         lgb_sevk = max(float(sevk_model.predict(row)[0]), 0)
-        lgb_iade = max(float(iade_model.predict(row)[0]), 0)
 
         # Hibrit tahmin
         ratio = _hybrid_ratio(target, national_tiraj, sector_trends, cat)
         hybrid_net  = max(prev_net  * ratio, 0)
         hybrid_sevk = max(prev_sevk * ratio, 0)
-        hybrid_iade = max(prev_iade * ratio, 0)
 
         # Ensemble: 55% LGB + 45% Hibrit
         final_net  = round(0.55 * lgb_net  + 0.45 * hybrid_net,  2)
         final_sevk = round(0.55 * lgb_sevk + 0.45 * hybrid_sevk, 2)
-        final_iade = round(0.55 * lgb_iade + 0.45 * hybrid_iade, 2)
+
+        # İade türetme: sevk - net (matematiksel tutarlılık garantisi)
+        # Negatif olamaz: sevk < net ise iade = 0 (kısıt)
+        final_iade = round(max(final_sevk - final_net, 0), 2)
 
         # CI: MAE-tabanlı ±1σ band
         ci_low  = max(final_net - 1.0 * mae, 0)
@@ -548,9 +582,10 @@ def forecast_one(
 
         net_preds[target]  = {"value": final_net,  "ci_low": round(ci_low, 2),  "ci_high": round(ci_high, 2)}
         sevk_preds[target] = {"value": final_sevk}
-        iade_preds[target] = {"value": final_iade}
+        iade_preds[target] = {"value": final_iade}  # türetilmiş değer
 
         # Sonraki yıl için güncelle
+        # prev_iade da türetilmiş değerden güncelleniyor
         prev_net, prev_sevk, prev_iade = final_net, final_sevk, final_iade
         lag2_net, lag2_sevk = (f_nets[-1] if target == 2026 else net_preds[2026]["value"]), \
                               (f_sevks[-1] if target == 2026 else sevk_preds[2026]["value"])
@@ -642,17 +677,23 @@ def load_all(force: bool = False) -> dict:
     df = build_global_df(magazines_raw, national_tiraj, sector_trends)
     print(f"      {len(df)} satır, {len(FEATURES)} özellik")
 
-    print("[3/5] Walk-Forward CV (3 fold: 2023, 2024, 2025)...")
+    print("[3/5] Walk-Forward CV (3 fold: 2023, 2024, 2025) — Net Sevk & Toplam Sevk...")
     cv_metrics = walk_forward_cv(df)
+    print("      [Net Sevk CV]")
     for fold in cv_metrics["folds"]:
-        print(f"      Fold {fold['test_year']}: MAE={fold['mae']:,.0f}  MAPE={fold['mape']:.1f}%  R²={fold['r2']:.3f}  "
+        print(f"        Fold {fold['test_year']}: MAE={fold['mae']:,.0f}  MAPE={fold['mape']:.1f}%  R²={fold['r2']:.3f}  "
               f"(train={fold['n_train']}, test={fold['n_test']})")
-    print(f"      Ortalama -> MAE={cv_metrics['mean_mae']:,.0f}  MAPE={cv_metrics['mean_mape']:.1f}%  R2={cv_metrics['mean_r2']:.3f}")
+    print(f"        Ortalama -> MAE={cv_metrics['mean_mae']:,.0f}  MAPE={cv_metrics['mean_mape']:.1f}%  R²={cv_metrics['mean_r2']:.3f}")
+    print("      [Toplam Sevk CV]")
+    for fold in cv_metrics["sevk_folds"]:
+        print(f"        Fold {fold['test_year']}: MAE={fold['mae']:,.0f}  MAPE={fold['mape']:.1f}%  R²={fold['r2']:.3f}  "
+              f"(train={fold['n_train']}, test={fold['n_test']})")
+    print(f"        Ortalama -> MAE={cv_metrics['sevk_mean_mae']:,.0f}  MAPE={cv_metrics['sevk_mean_mape']:.1f}%  R²={cv_metrics['sevk_mean_r2']:.3f}")
 
-    print("[4/5] Final modeller eğitiliyor (tüm veri)...")
+    print("[4/5] Final modeller eğitiliyor (Net Sevk + Toplam Sevk, tüm veri)...")
     net_model  = train_final_model(df)
     sevk_model = train_sevk_model(df)
-    iade_model = train_iade_model(df)
+    # İade modeli yok: iade = sevk - net olarak türetilecek
 
     print("[5/5] 90 dergi için tahmin üretiliyor...")
     le = LabelEncoder()
@@ -665,7 +706,7 @@ def load_all(force: bool = False) -> dict:
     results = {}
     for name, data in magazines_raw.items():
         results[name] = forecast_one(
-            name, data, net_model, sevk_model, iade_model,
+            name, data, net_model, sevk_model,
             mag_enc_map[name], national_tiraj, sector_trends, cv_metrics, le
         )
 

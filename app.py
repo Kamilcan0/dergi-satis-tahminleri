@@ -273,9 +273,20 @@ def api_cv_metrics():
             return float(obj)
         return obj
 
+    cv = _to_native(cache.get("cv_metrics", {}))
     return jsonify({
-        "cv_metrics":         _to_native(cache.get("cv_metrics", {})),
+        # Net Sevk CV metrikleri
+        "cv_metrics":         cv,
+        # Toplam Sevk CV metrikleri (ayrı model)
+        "sevk_cv": {
+            "folds":     cv.get("sevk_folds", []),
+            "mean_mae":  cv.get("sevk_mean_mae"),
+            "mean_mape": cv.get("sevk_mean_mape"),
+            "mean_r2":   cv.get("sevk_mean_r2"),
+        },
         "feature_importance": _to_native(cache.get("feature_importance", [])),
+        # Not: iade_forecast = sevk_forecast - net_forecast (türetilmiş, model yok)
+        "iade_method": "derived",
     })
 
 
