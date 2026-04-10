@@ -814,6 +814,45 @@
       transition: all .15s;
     }
     .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Browse arama kutusu */
+    .browse-search-wrap {
+      position: relative;
+      flex: 1;
+      max-width: 320px;
+    }
+    .browse-search-wrap input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1.5px solid var(--border2);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 8px 36px 8px 14px;
+      font-size: .82rem;
+      font-family: var(--sans);
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .browse-search-wrap input::placeholder { color: var(--muted2); }
+    .browse-search-wrap input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 14px var(--accent-glow);
+    }
+    .browse-search-icon {
+      position: absolute; right: 11px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted2); font-size: 13px;
+      pointer-events: none;
+    }
+    .browse-no-result {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    .browse-no-result .no-res-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: .4; }
+
     .mag-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1000,7 +1039,6 @@
       </div>
     </div><!-- /view-dashboard -->
 
-    <!-- ── VIEW: BROWSE ── -->
     <div class="view" id="view-browse">
       <div class="browse-area">
         <div class="browse-header">
@@ -1008,11 +1046,23 @@
             <div class="browse-title" id="browse-title">Kategoriler</div>
             <div class="browse-subtitle" id="browse-subtitle">Bir dergi seçerek tahmin başlatın</div>
           </div>
+          <!-- Arama kutusu -->
+          <div class="browse-search-wrap">
+            <input
+              type="text"
+              id="browse-search-input"
+              placeholder="Dergi adı ara…"
+              oninput="browseSearch()"
+              autocomplete="off"
+            />
+            <span class="browse-search-icon">🔍</span>
+          </div>
           <button class="back-btn" onclick="showDashboard()">⌂ Dashboard</button>
         </div>
         <div class="mag-grid" id="mag-grid"></div>
       </div>
     </div><!-- /view-browse -->
+
 
     <!-- ── VIEW: PREDICT ── -->
     <div class="view" id="view-predict">
@@ -1335,25 +1385,71 @@ function showBrowse(cat) {
   lastBrowseCat = cat;
   showView("view-browse");
 
-  const mags = cat === "Tümü" ? allMags : allMags.filter(m => m.category === cat);
+  // Arama kutusunu temizle
+  const searchInput = document.getElementById("browse-search-input");
+  if (searchInput) searchInput.value = "";
+
   document.getElementById("browse-title").textContent =
     cat === "Tümü" ? "Tüm Dergiler" : cat;
-  document.getElementById("browse-subtitle").textContent =
-    `${mags.length} dergi — Tahmin için bir dergiye tıklayın`;
 
-  const color = cat === "Tümü" ? "var(--accent)" : catColor(cat);
-  document.getElementById("mag-grid").innerHTML = mags.map(m => {
+  renderBrowseGrid(cat, "");
+}
+
+function browseSearch() {
+  const q = (document.getElementById("browse-search-input")?.value || "").trim();
+  renderBrowseGrid(lastBrowseCat, q);
+}
+
+function renderBrowseGrid(cat, query) {
+  let mags = cat === "Tümü" ? allMags : allMags.filter(m => m.category === cat);
+
+  // Arama filtresi
+  const q = query.toLowerCase();
+  if (q) {
+    mags = mags.filter(m => m.name.toLowerCase().includes(q));
+  }
+
+  document.getElementById("browse-subtitle").textContent =
+    q
+      ? `"${query}" için ${mags.length} sonuç — Tahmin için bir dergiye tıklayın`
+      : `${mags.length} dergi — Tahmin için bir dergiye tıklayın`;
+
+  const grid = document.getElementById("mag-grid");
+
+  if (mags.length === 0) {
+    grid.innerHTML = `
+      <div class="browse-no-result">
+        <div class="no-res-icon">🔍</div>
+        <div>"<strong>${query}</strong>" ile eşleşen dergi bulunamadı.</div>
+        <div style="margin-top:8px;font-size:.75rem;color:var(--muted2)">Farklı bir kelime deneyin veya aramayı temizleyin.</div>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = mags.map(m => {
     const riskColor = RISK_COLORS[m.risk_level] || "var(--muted2)";
     const cc = catColor(m.category);
     const chg = m.change_rate_last != null
       ? `<span class="${m.change_rate_last >= 0 ? 'pos' : 'neg'}" style="font-size:.65rem">${m.change_rate_last >= 0 ? "+" : ""}${m.change_rate_last.toFixed(1)}% son yıl</span>`
       : "";
-    return `<div class="mag-card" onclick="loadMag('${m.name.replace(/'/g, "\\'")}')"
+
+    // Arama terimi varsa dergi adında vurgula
+    let displayName = m.name;
+    if (q) {
+      const idx = m.name.toLowerCase().indexOf(q);
+      if (idx !== -1) {
+        displayName = m.name.slice(0, idx)
+          + `<mark style="background:rgba(108,99,255,.35);color:var(--accent);border-radius:3px;padding:0 2px">${m.name.slice(idx, idx + query.length)}</mark>`
+          + m.name.slice(idx + query.length);
+      }
+    }
+
+    return `<div class="mag-card" onclick="loadMag('${m.name.replace(/'/g, "\\'")}')" 
         style="border-color:${cc}33"
         onmouseenter="this.style.borderColor='${cc}88'" onmouseleave="this.style.borderColor='${cc}33'">
       <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${cc};opacity:.7"></div>
       <div class="mc-head">
-        <div class="mc-name">${m.name}</div>
+        <div class="mc-name">${displayName}</div>
         <div class="mc-risk-dot" style="background:${riskColor}" title="${m.risk_level || ''} Risk"></div>
       </div>
       <div class="mc-forecast-label">2026 Tahmin</div>
@@ -1363,6 +1459,7 @@ function showBrowse(cat) {
     </div>`;
   }).join("");
 }
+
 
 function showPredict() {
   showView("view-predict");
